@@ -97,25 +97,26 @@ stateDiagram-v2
     [*] --> System
 
     state System {
+
         state AoA_Calculator {
-            [*] --> ReadingSensors
+        [*] --> ReadingSensors
 
-            state ReadingSensors {
-                [*] --> SensorsAgree
+        state ReadingSensors {
+            [*] --> SensorsAgree
 
-                SensorsAgree --> SensorsDisagree: |S1 - S2| > DISAGREE_THRESHOLD
-                SensorsDisagree --> SensorsAgree: |S1 - S2| < DISAGREE_CLEAR
+            SensorsAgree --> SensorsDisagree : Sensor difference exceeds threshold
 
-                SensorsAgree --> SensorFailed: One sensor stale or missing
-                SensorFailed --> SensorsAgree: Failed sensor recovers
+            SensorsDisagree --> SensorsAgree : abs(S1-S2) <= DISAGREE_CLEAR
 
-            }
+            SensorsAgree --> SensorFailed : sensor_stale_or_missing
 
-            state BothFailed {
-                [*] --> NoData
-                NoData --> ReadingSensors: Any sensor recovers
-            }
+            SensorFailed --> SensorsAgree : sensor_recovered
+
+            SensorsDisagree --> BothFailed : disagree_timeout
+
+            SensorFailed --> BothFailed : remaining_sensor_failed
         }
+    }
 
         state FlightControl {
             [*] --> TAKEOFF
@@ -123,71 +124,70 @@ stateDiagram-v2
             state TAKEOFF {
                 [*] --> TK_Normal
 
-                TK_Normal --> TK_Warning: AoA > TK_PROTECT_UPPER
-                TK_Warning --> TK_Normal: Pilot responds within 5s
-                TK_Warning --> TK_Protection: No response in 5s
-                TK_Protection --> TK_Normal: AoA back to safe
+                TK_Normal --> TK_Warning : AoA > TK_PROTECT_UPPER
+                TK_Warning --> TK_Normal : pilot_response
+                TK_Warning --> TK_Protection : no_response_5s
+                TK_Protection --> TK_Normal : AoA_safe
             }
 
-            TAKEOFF --> CLIMB: Flight_Mode Changed
+            TAKEOFF --> CLIMB : Flight_Mode_Changed
 
             state CLIMB {
                 [*] --> CL_Normal
 
-                CL_Normal --> CL_Warning: AoA > CL_PROTECT_UPPER
-                CL_Warning --> CL_Normal: Pilot responds within 5s
-                CL_Warning --> CL_Protection: No response in 5s
-                CL_Protection --> CL_Normal: AoA back to safe
+                CL_Normal --> CL_Warning : AoA > CL_PROTECT_UPPER
+                CL_Warning --> CL_Normal : pilot_response
+                CL_Warning --> CL_Protection : no_response_5s
+                CL_Protection --> CL_Normal : AoA_safe
             }
 
-            CLIMB --> CRUISE: Flight_Mode Changed
+            CLIMB --> CRUISE : Flight_Mode_Changed
 
             state CRUISE {
-                [*] --> CR_Autopilot
-
-                state CR_Autopilot {
-                    [*] --> CR_AP_Normal
-
-                    CR_AP_Normal --> CR_AP_Warning: AoA > CR_PROTECT_UPPER
-                    CR_AP_Warning --> CR_AP_Normal: Autopilot corrects within 5s
-                    CR_AP_Warning --> CR_Pilot: No correction in 5s → FORCE to Pilot
-                }
+                [*] --> CR_Pilot   
 
                 state CR_Pilot {
                     [*] --> CR_PL_Normal
 
-                    CR_PL_Normal --> CR_PL_Warning: AoA > CR_PROTECT_UPPER
-                    CR_PL_Warning --> CR_PL_Normal: Pilot responds within 5s
-                    CR_PL_Warning --> CR_Autopilot: No response in 5s → FORCE to Autopilot
+                    CR_PL_Normal --> CR_PL_Warning : AoA > CR_PROTECT_UPPER
+                    CR_PL_Warning --> CR_PL_Normal : pilot_response
+                    CR_PL_Warning --> CR_Autopilot : no_response_5s
                 }
 
-                CR_Autopilot --> CR_Pilot: Pilot takes manual control
-                CR_Pilot --> CR_Autopilot: Pilot engages autopilot
+                state CR_Autopilot {
+                    [*] --> CR_AP_Normal
+
+                    CR_AP_Normal --> CR_AP_Warning : AoA > CR_PROTECT_UPPER
+                    CR_AP_Warning --> CR_AP_Normal : autopilot_corrects
+                    CR_AP_Warning --> CR_Pilot : no_correction_5s
+                }
+
+                CR_Pilot --> CR_Autopilot : pilot_engages_autopilot
+                CR_Autopilot --> CR_Pilot : pilot_takes_manual_control
             }
 
-            CRUISE --> LANDING: Flight_Mode Changed
+            CRUISE --> LANDING : Flight_Mode_Changed
 
             state LANDING {
                 [*] --> LD_Normal
 
-                LD_Normal --> LD_Warning: AoA > LD_PROTECT_UPPER
-                LD_Warning --> LD_Normal: Pilot responds within 5s
-                LD_Warning --> LD_Protection: No response in 5s
-                LD_Protection --> LD_Normal: AoA back to safe
+                LD_Normal --> LD_Warning : AoA > LD_PROTECT_UPPER
+                LD_Warning --> LD_Normal : pilot_response
+                LD_Warning --> LD_Protection : no_response_5s
+                LD_Protection --> LD_Normal : AoA_safe
             }
 
-            LANDING --> CLIMB: Go-around detected
+            LANDING --> CLIMB : go_around_detected
         }
     }
 
     note right of AoA_Calculator
         Output: AoA_EFFECTIVE
-        ─────────────────────
+        --------------------
         SensorsAgree:
           AoA_EFFECTIVE = avg(S1, S2)
         SensorsDisagree:
           AoA_EFFECTIVE = max(S1, S2)
-          (conservative — assume worst)
         SensorFailed:
           AoA_EFFECTIVE = valid sensor only
         BothFailed:
@@ -197,20 +197,17 @@ stateDiagram-v2
 
     note right of FlightControl
         Pilot-only phases:
-        ─────────────────
-        Normal → Warning (5s timer)
-          Responded?  → Normal
-          No response? → Protection
-          AoA fixed   → Normal
+        ------------------
+        Normal → Warning (5s)
+          Responded → Normal
+          No response → Protection
 
-        Cruise (Pilot + Autopilot):
-        ─────────────────────────
-        Normal → Warning (5s timer)
-          Responded?  → Normal
-          No response? → FORCE switch
-            to the other mode
+        Cruise phase:
+        -------------
+        Pilot FIRST
+        Autopilot only if engaged or forced
 
-        Configurable variables:
+        Configurable thresholds:
           TK_PROTECT_UPPER
           CL_PROTECT_UPPER
           CR_PROTECT_UPPER
