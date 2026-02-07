@@ -23,7 +23,7 @@ The system shall use the most recently received valid value from each input fram
 The system shall continuously evaluate the current angle-of-attack against safe operating limits appropriate to the current flight mode and aircraft configuration.
 
 ### FR-4 Sensor Disagreement Resolution  
-The system shall select the higher angle-of-attack value when the difference between the two AoA sensor readings exceeds a predefined tolerance α.
+The system shall select the best two angle-of-attack value when the difference between the three AoA sensor readings exceeds a predefined tolerance α.
 
 ### FR-5 Protection Mode Activation  
 If angle-of-attack exceeds defined safe limits, the system shall override pilot or autopilot control authority and command corrective actions to drive AoA toward a safe range.

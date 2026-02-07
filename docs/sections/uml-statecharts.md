@@ -8,7 +8,7 @@
 - Logging of infusion and fault events
 
 ### Outside the System
-- AoA sensors (S1, S2)
+- AoA sensors (S1, S2, S3)
 - Flight Mode 
 - Flight Parameter (Airspeed)
 - Pilot
@@ -18,6 +18,7 @@
 - Sensor data is provided periodically and asynchronously
 - Aircraft configuration (A or B) is loaded at startup and remains fixed
 - Uninterrupted power supply
+- Constant Air Density 
 
 
 ---
@@ -28,7 +29,7 @@
 
 | Actor / Entity | Type | Interface Description |
 |---------------|------|-----------------------|
-| AoA Sensor 1 and 2  | Sensors | AoA measurement |
+| AoA Sensor 1, 2 and 3   | Sensors | AoA measurement |
 | Airspeed Sensor | Sensor | Transmits current airspeed |
 | Flight Mode Source | System | Transmits current flight mode (TAKEOFF / CLIMB / CRUISE / LANDING)  |
 | Aircraft Conguration | System | Selects Aircraft A or Aircraft B  |
@@ -41,15 +42,15 @@
 
 ```mermaid
 flowchart LR
-    Pilot -->|Manual inputs / Acknowledge| AoA_System
     AoA1[AoA Sensor S1] -->|AoA Data| AoA_System
     AoA2[AoA Sensor S2] -->|AoA Data| AoA_System
+    AoA3[AoA Sensor S3] -->|AoA Data| AoA_System
     AirData[Flight Param] -->|Airspeed| AoA_System
     Phase[Flight Mode] -->|Takeoff / climb / cruise / landing| AoA_System
     Config[Aircraft Configuration] -->|A or B| AoA_System
 
-    AoA_System -->|Warnings| Pilot
-    AoA_System -->|Autopilot commands| Auto[Autopilot System]
+    AoA_System -->|Warnings| Auto[Pilot / Autopilot System]
+    AoA_System -->|Pilot / Autopilot commands| Auto[Pilot / Autopilot System]
     AoA_System -->|Fault logs| Logger[Maintenance Logger]
 ```
 
@@ -124,10 +125,12 @@ stateDiagram-v2
             state TAKEOFF {
                 [*] --> TK_Normal
 
-                TK_Normal --> TK_Warning : AoA > TK_PROTECT_UPPER
-                TK_Warning --> TK_Normal : pilot_response
-                TK_Warning --> TK_Protection : no_response_5s
-                TK_Protection --> TK_Normal : AoA_safe
+                TK_Normal --> TK_Caution : AoA approaching to stall or too low 
+                TK_Caution --> TK_Protection : almost stalling or overspeeding
+                TK_Protection --> TK_Override : stall is happening
+                TK_Override --> TK_Normal : AoA return to safe state 
+                TK_Protection --> TK_Caution 
+                TK_Caution --> TK_Normal
             }
 
             TAKEOFF --> CLIMB : Flight_Mode_Changed
@@ -135,35 +138,26 @@ stateDiagram-v2
             state CLIMB {
                 [*] --> CL_Normal
 
-                CL_Normal --> CL_Warning : AoA > CL_PROTECT_UPPER
-                CL_Warning --> CL_Normal : pilot_response
-                CL_Warning --> CL_Protection : no_response_5s
-                CL_Protection --> CL_Normal : AoA_safe
+                CL_Normal --> CL_Caution : AoA approaching to stall or too low 
+                CL_Caution --> CL_Protection : almost stalling or overspeeding
+                CL_Protection --> CL_Override : stall is happening
+                CL_Override --> CL_Normal : AoA return to safe state 
+                CL_Protection --> CL_Caution 
+                CL_Caution --> CL_Normal
             }
 
             CLIMB --> CRUISE : Flight_Mode_Changed
 
             state CRUISE {
-                [*] --> CR_Pilot   
+                [*] --> CR_Normal
 
-                state CR_Pilot {
-                    [*] --> CR_PL_Normal
+                CR_Normal --> CR_Caution : AoA approaching to stall or too low 
+                CR_Caution --> CR_Protection : almost stalling or overspeeding
+                CR_Protection --> CR_Override : stall is happening
+                CR_Override --> CR_Normal : AoA return to safe state 
+                CR_Protection --> CR_Caution 
+                CR_Caution --> CR_Normal
 
-                    CR_PL_Normal --> CR_PL_Warning : AoA > CR_PROTECT_UPPER
-                    CR_PL_Warning --> CR_PL_Normal : pilot_response
-                    CR_PL_Warning --> CR_Autopilot : no_response_5s
-                }
-
-                state CR_Autopilot {
-                    [*] --> CR_AP_Normal
-
-                    CR_AP_Normal --> CR_AP_Warning : AoA > CR_PROTECT_UPPER
-                    CR_AP_Warning --> CR_AP_Normal : autopilot_corrects
-                    CR_AP_Warning --> CR_Pilot : no_correction_5s
-                }
-
-                CR_Pilot --> CR_Autopilot : pilot_engages_autopilot
-                CR_Autopilot --> CR_Pilot : pilot_takes_manual_control
             }
 
             CRUISE --> LANDING : Flight_Mode_Changed
@@ -171,48 +165,17 @@ stateDiagram-v2
             state LANDING {
                 [*] --> LD_Normal
 
-                LD_Normal --> LD_Warning : AoA > LD_PROTECT_UPPER
-                LD_Warning --> LD_Normal : pilot_response
-                LD_Warning --> LD_Protection : no_response_5s
-                LD_Protection --> LD_Normal : AoA_safe
+                LD_Normal --> LD_Caution : AoA approaching to stall or too low 
+                LD_Caution --> LD_Protection : almost stalling or overspeeding
+                LD_Protection --> LD_Override : stall is happening
+                LD_Override --> LD_Normal : AoA return to safe state 
+                LD_Protection --> LD_Caution 
+                LD_Caution --> LD_Normal
             }
 
             LANDING --> CLIMB : go_around_detected
         }
     }
-
-    note right of AoA_Calculator
-        Output: AoA_EFFECTIVE
-        --------------------
-        SensorsAgree:
-          AoA_EFFECTIVE = avg(S1, S2)
-        SensorsDisagree:
-          AoA_EFFECTIVE = max(S1, S2)
-        SensorFailed:
-          AoA_EFFECTIVE = valid sensor only
-        BothFailed:
-          AoA_EFFECTIVE = UNKNOWN
-          (trigger emergency)
-    end note
-
-    note right of FlightControl
-        Pilot-only phases:
-        ------------------
-        Normal → Warning (5s)
-          Responded → Normal
-          No response → Protection
-
-        Cruise phase:
-        -------------
-        Pilot FIRST
-        Autopilot only if engaged or forced
-
-        Configurable thresholds:
-          TK_PROTECT_UPPER
-          CL_PROTECT_UPPER
-          CR_PROTECT_UPPER
-          LD_PROTECT_UPPER
-    end note
 ```
 
 ---
