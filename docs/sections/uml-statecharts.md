@@ -113,9 +113,9 @@ stateDiagram-v2
 
             SensorFailed --> SensorsAgree : sensor_recovered
 
-            SensorsDisagree --> BothFailed : disagree_timeout
+            SensorsDisagree --> Failed : disagree_timeout
 
-            SensorFailed --> BothFailed : remaining_sensor_failed
+            SensorFailed --> Failed : remaining_sensor_failed
         }
     }
 
