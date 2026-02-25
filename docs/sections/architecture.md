@@ -17,7 +17,7 @@ The faculty specification (p2-aoa-controller) provides **three independent AoA s
 
 Preliminary software block decomposition derived from the project spec, UART frame definitions, and our behavioral statechart.
 
-![Block Diagram](docs/assets/images/Block Diagram.jpeg)
+![Block Diagram](../assets/images/Block_Diagram.jpeg)
 
 **Key observations from the sketch:**
 - UART Parser is the sole hardware-facing data source — all other modules depend only on its clean interface.
