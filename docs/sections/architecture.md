@@ -764,8 +764,16 @@ flowchart TB
     ALARM["AlarmSystem"]
     log["Logging"]
 
-    validator["SensorValidator"]
-    estimator["AoA_Estimator"]
+    validator["SensorValidator
+    Interface: sensor_tick()
+    get_sensor_state() : SensorState
+    get_voted_aoa() : float
+    Owner: Aditya Ashok Pise"]
+    estimator["AoA_Estimator
+    Interface: estimate_tick()
+    get_aoa_effective() : float
+    get_aoa_status() : AoaStatus
+    Owner: Aditya Ashok Pise"]
 
     AoASensor["AoA_Sensor_Frames"]
     parameter["Flight Parameter Frames"]
@@ -797,6 +805,7 @@ flowchart TB
     SENSOR --- ALARM
     SENSOR --- log
 ```
+
 
 ---
 
