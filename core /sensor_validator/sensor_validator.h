@@ -5,6 +5,7 @@
 
 #define NUM_SENSORS 3
 #define BUFFER_SIZE 5
+#define OUTLIER_THRESHOLD 5.0f
 
 typedef struct {
     float value;
@@ -13,13 +14,14 @@ typedef struct {
 
 typedef struct {
     SensorSample_t buffer[BUFFER_SIZE];
-    uint8_t head;   // points to latest index
+    uint8_t head;
 } SensorBuffer_t;
 
 typedef struct {
-    float value[NUM_SENSORS];
+    float fused_value;
+    float weights[NUM_SENSORS];
     uint8_t valid[NUM_SENSORS];
-} SensorValidated_t;
+} SensorOutput_t;
 
 // APIs
 void SensorBuffer_Init(SensorBuffer_t *buf);
@@ -27,6 +29,6 @@ void SensorBuffer_Add(SensorBuffer_t *buf, float value, uint8_t valid);
 uint8_t SensorBuffer_GetLatestValid(SensorBuffer_t *buf, float *out);
 
 void SensorValidator_Process(SensorBuffer_t buffers[],
-                             SensorValidated_t *output);
+                             SensorOutput_t *output);
 
 #endif
