@@ -1,39 +1,55 @@
 #include "sensor_validator.h"
-#include <math.h>
 
-static void swap(float *a, float *b) {
-    float temp = *a;
-    *a = *b;
-    *b = temp;
+// Initialize buffer
+void SensorBuffer_Init(SensorBuffer_t *buf) {
+    buf->head = 0;
+    for (int i = 0; i < BUFFER_SIZE; i++) {
+        buf->buffer[i].valid = 0;
+        buf->buffer[i].value = 0.0f;
+    }
 }
 
-static float median3(float a, float b, float c) {
-    if (a > b) swap(&a, &b);
-    if (b > c) swap(&b, &c);
-    if (a > b) swap(&a, &b);
-    return b;
+// Add new sample (circular buffer)
+void SensorBuffer_Add(SensorBuffer_t *buf, float value, uint8_t valid) {
+    buf->buffer[buf->head].value = value;
+    buf->buffer[buf->head].valid = valid;
+
+    buf->head = (buf->head + 1) % BUFFER_SIZE;
 }
 
-void SensorValidator_Process(SensorInput_t *input, SensorOutput_t *output) {
-    float a = input->value[0];
-    float b = input->value[1];
-    float c = input->value[2];
+// Get latest valid value (fallback logic)
+uint8_t SensorBuffer_GetLatestValid(SensorBuffer_t *buf, float *out) {
 
-    float median = median3(a, b, c);
+    int idx = buf->head;
 
-    float values[NUM_SENSORS] = {a, b, c};
+    // Traverse last 5 values (reverse order)
+    for (int i = 0; i < BUFFER_SIZE; i++) {
 
-    for (int i = 0; i < NUM_SENSORS; i++) {
-        float error = fabsf(values[i] - median);
+        idx = (idx - 1 + BUFFER_SIZE) % BUFFER_SIZE;
 
-        if (error > OUTLIER_THRESHOLD) {
-            // Outlier detected
-            output->weights[i] = 0.0f;
-        } else {
-            // Weight inversely proportional to error
-            output->weights[i] = 1.0f / (1.0f + error);
+        if (buf->buffer[idx].valid) {
+            *out = buf->buffer[idx].value;
+            return 1;  // found valid
         }
+    }
 
-        output->validated_values[i] = values[i];
+    return 0; // all values invalid
+}
+
+// Main validation
+void SensorValidator_Process(SensorBuffer_t buffers[],
+                             SensorValidated_t *output)
+{
+    for (int i = 0; i < NUM_SENSORS; i++) {
+
+        float value = 0.0f;
+
+        if (SensorBuffer_GetLatestValid(&buffers[i], &value)) {
+            output->value[i] = value;
+            output->valid[i] = 1;
+        } else {
+            output->value[i] = 0.0f;
+            output->valid[i] = 0;  // sensor invalid
+        }
     }
 }
