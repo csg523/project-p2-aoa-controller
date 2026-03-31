@@ -4,17 +4,29 @@
 #include <stdint.h>
 
 #define NUM_SENSORS 3
-#define OUTLIER_THRESHOLD 5.0f   // configurable based on system
+#define BUFFER_SIZE 5
+
+typedef struct {
+    float value;
+    uint8_t valid;
+} SensorSample_t;
+
+typedef struct {
+    SensorSample_t buffer[BUFFER_SIZE];
+    uint8_t head;   // points to latest index
+} SensorBuffer_t;
 
 typedef struct {
     float value[NUM_SENSORS];
-} SensorInput_t;
+    uint8_t valid[NUM_SENSORS];
+} SensorValidated_t;
 
-typedef struct {
-    float validated_values[NUM_SENSORS];
-    float weights[NUM_SENSORS];
-} SensorOutput_t;
+// APIs
+void SensorBuffer_Init(SensorBuffer_t *buf);
+void SensorBuffer_Add(SensorBuffer_t *buf, float value, uint8_t valid);
+uint8_t SensorBuffer_GetLatestValid(SensorBuffer_t *buf, float *out);
 
-void SensorValidator_Process(SensorInput_t *input, SensorOutput_t *output);
+void SensorValidator_Process(SensorBuffer_t buffers[],
+                             SensorValidated_t *output);
 
 #endif
