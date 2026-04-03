@@ -1,0 +1,4 @@
+flight_phase,aoa_low,aoa_high
+takeoff,5.0,15.0
+cruise,3.0,12.0
+landing,8.0,18.0
