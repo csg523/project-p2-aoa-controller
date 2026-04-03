@@ -189,9 +189,8 @@ UART_FrameParser        AircraftConfig
 |--------|-----------------|
 | Siddharth | `UART_FrameParser`, `AircraftConfig` |
 | Aditya A Pise | `SensorValidator`, `AoA_Estimator` |
-| Srishti Singh | `FaultLogger` |
-| Vishurt | `FlightControlFSM` |
-| Aniket Saxena| `ElevatorCmdManager`, `WarningManager` |
+| Srishti Singh | `FaultLogger`, `WarningManager` |
+| Aniket Saxena| `ElevatorCmdManager`, `FlightControlFSM` |
 
 Each member is responsible for: interface definition, encapsulation rules, safeguards, and module-level tests for their assigned modules.
 
