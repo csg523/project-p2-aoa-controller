@@ -2,33 +2,39 @@
 #define SENSOR_VALIDATOR_H
 
 #include <stdint.h>
+#include <pthread.h>
 
-#define NUM_SENSORS 3
 #define BUFFER_SIZE 5
-#define OUTLIER_THRESHOLD 5.0f
+#define NUM_SENSORS 3
+#define OUTLIER_THRESHOLD 5.0   // in degrees
 
 typedef struct {
-    float value;
+    float buffer[BUFFER_SIZE];
+    int index;
+    int count;
+} CircularBuffer;
+
+typedef struct {
+    float s1, s2, s3;
+    uint32_t ts;
     uint8_t valid;
-} SensorSample_t;
+} RawSensorData;
 
 typedef struct {
-    SensorSample_t buffer[BUFFER_SIZE];
-    uint8_t head;
-} SensorBuffer_t;
+    float aoa_validated;
+    float confidence;
+    uint8_t fault_flag;
+} ValidatedData;
 
 typedef struct {
-    float fused_value;
-    float weights[NUM_SENSORS];
-    uint8_t valid[NUM_SENSORS];
-} SensorOutput_t;
+    CircularBuffer buffers[NUM_SENSORS];
+    pthread_mutex_t *mutex;
+} SensorValidatorContext;
 
-// APIs
-void SensorBuffer_Init(SensorBuffer_t *buf);
-void SensorBuffer_Add(SensorBuffer_t *buf, float value, uint8_t valid);
-uint8_t SensorBuffer_GetLatestValid(SensorBuffer_t *buf, float *out);
+void SensorValidator_init(SensorValidatorContext *ctx, pthread_mutex_t *mutex);
 
-void SensorValidator_Process(SensorBuffer_t buffers[],
-                             SensorOutput_t *output);
+void SensorValidator_process(SensorValidatorContext *ctx,
+                             RawSensorData *input,
+                             ValidatedData *output);
 
 #endif
