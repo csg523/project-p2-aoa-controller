@@ -1,6 +1,4 @@
-[![Open in Codespaces](https://classroom.github.com/assets/launch-codespace-2972f46106e565e64193e422d61a12cf1da4916b45550586e14ef0a7c637dd04.svg)](https://classroom.github.com/open-in-codespaces?assignment_repo_id=22326811)
-# CS G523 – Capstone Project  
-## p2-aoa-controller – Aircraft Angle-of-Attack (AoA) Safety Controller  
+ ## Project - Aircraft Angle-of-Attack (AoA) Safety Controller  
 **(UART-Simulated Inputs, Independent Data Sources)**
 
 ---
@@ -9,10 +7,10 @@
 
 Design and implement an **embedded safety controller for managing aircraft angle-of-attack (AoA)**.
 
-The system receives **two independent AoA sensor values** and determines whether the aircraft can continue to be controlled by the **pilot or autopilot**, or whether **automatic AoA-based intervention** is required to prevent unsafe flight conditions.
+The system receives **three independent AoA sensor values** and determines whether the aircraft can continue to be controlled by the **pilot or autopilot**, or whether **automatic AoA-based intervention** is required to prevent unsafe flight conditions.
 
 The system shall:
-- Continuously monitor two AoA sensor inputs
+- Continuously monitor three AoA sensor inputs
 - Determine whether the current AoA is within safe operating limits
 - Allow pilot or autopilot control when AoA is safely within limits
 - Detect when AoA is **approaching unsafe or critical limits**
@@ -72,7 +70,7 @@ This forces the software to reason about **asynchronous, partially updated syste
 
 ### 4.1 AoA Sensor Frames
 
-- Two independent AoA values are provided
+- Three independent AoA values are provided
 - Frames may:
   - arrive at different rates
   - be delayed, missing, noisy, or malformed
@@ -82,6 +80,7 @@ This forces the software to reason about **asynchronous, partially updated syste
 $AOA,
 S1=12.4,
 S2=12.9,
+S3=15.6,
 TS=345678
 *
 ```
