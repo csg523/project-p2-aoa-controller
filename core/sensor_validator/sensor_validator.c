@@ -1,102 +1,90 @@
 #include "sensor_validator.h"
+#include <stdlib.h>
 #include <math.h>
 
-// ---------- BUFFER ----------
+static void buffer_insert(CircularBuffer *cb, float value) {
+    cb->buffer[cb->index] = value;
+    cb->index = (cb->index + 1) % BUFFER_SIZE;
 
-void SensorBuffer_Init(SensorBuffer_t *buf) {
-    buf->head = 0;
-    for (int i = 0; i < BUFFER_SIZE; i++) {
-        buf->buffer[i].valid = 0;
-        buf->buffer[i].value = 0.0f;
-    }
+    if (cb->count < BUFFER_SIZE)
+        cb->count++;
 }
 
-void SensorBuffer_Add(SensorBuffer_t *buf, float value, uint8_t valid) {
-    buf->buffer[buf->head].value = value;
-    buf->buffer[buf->head].valid = valid;
-    buf->head = (buf->head + 1) % BUFFER_SIZE;
+static int compare(const void *a, const void *b) {
+    return (*(float*)a - *(float*)b);
 }
 
-uint8_t SensorBuffer_GetLatestValid(SensorBuffer_t *buf, float *out) {
+static float compute_median(CircularBuffer *cb) {
+    float temp[BUFFER_SIZE];
+    int n = cb->count;
 
-    int idx = buf->head;
+    for (int i = 0; i < n; i++)
+        temp[i] = cb->buffer[i];
 
-    for (int i = 0; i < BUFFER_SIZE; i++) {
-        idx = (idx - 1 + BUFFER_SIZE) % BUFFER_SIZE;
+    qsort(temp, n, sizeof(float), compare);
 
-        if (buf->buffer[idx].valid) {
-            *out = buf->buffer[idx].value;
-            return 1;
-        }
-    }
-    return 0;
+    if (n % 2 == 0)
+        return (temp[n/2] + temp[n/2 - 1]) / 2.0;
+    else
+        return temp[n/2];
 }
 
-// ---------- MEDIAN ----------
-
-static void swap(float *a, float *b) {
-    float t = *a; *a = *b; *b = t;
+static int is_outlier(float value, float median) {
+    return fabs(value - median) > OUTLIER_THRESHOLD;
 }
 
-static float median3(float a, float b, float c) {
-    if (a > b) swap(&a, &b);
-    if (b > c) swap(&b, &c);
-    if (a > b) swap(&a, &b);
-    return b;
-}
-
-// ---------- MAIN PIPELINE ----------
-
-void SensorValidator_Process(SensorBuffer_t buffers[],
-                             SensorOutput_t *output)
-{
-    float values[NUM_SENSORS];
-    
-    // Step 1: Get latest valid values
-    for (int i = 0; i < NUM_SENSORS; i++) {
-
-        if (SensorBuffer_GetLatestValid(&buffers[i], &values[i])) {
-            output->valid[i] = 1;
-        } else {
-            values[i] = 0.0f;
-            output->valid[i] = 0;
-        }
-    }
-
-    // Step 2: Median voting
-    float median = median3(values[0], values[1], values[2]);
-
-    // Step 3 + 4: Outlier detection + weighted fusion
-    float numerator = 0.0f;
-    float denominator = 0.0f;
+void SensorValidator_init(SensorValidatorContext *ctx, pthread_mutex_t *mutex) {
+    ctx->mutex = mutex;
 
     for (int i = 0; i < NUM_SENSORS; i++) {
+        ctx->buffers[i].index = 0;
+        ctx->buffers[i].count = 0;
+    }
+}
 
-        if (!output->valid[i]) {
-            output->weights[i] = 0.0f;
-            continue;
-        }
+void SensorValidator_process(SensorValidatorContext *ctx,
+                             RawSensorData *input,
+                             ValidatedData *output) {
 
-        float error = fabsf(values[i] - median);
+    pthread_mutex_lock(ctx->mutex);
 
-        // Outlier rejection
-        if (error > OUTLIER_THRESHOLD) {
-            output->weights[i] = 0.0f;
-            continue;
-        }
+    float inputs[NUM_SENSORS] = {input->s1, input->s2, input->s3};
+    float medians[NUM_SENSORS];
+    float valid_values[NUM_SENSORS];
 
-        // Weight based on confidence
-        float weight = 1.0f / (1.0f + error);
+    int valid_count = 0;
 
-        output->weights[i] = weight;
-        numerator += values[i] * weight;
-        denominator += weight;
+    // Update buffers
+    for (int i = 0; i < NUM_SENSORS; i++) {
+        buffer_insert(&ctx->buffers[i], inputs[i]);
+        medians[i] = compute_median(&ctx->buffers[i]);
     }
 
-    // Final fused value
-    if (denominator > 0.0f) {
-        output->fused_value = numerator / denominator;
+    // Outlier rejection
+    for (int i = 0; i < NUM_SENSORS; i++) {
+        if (!is_outlier(inputs[i], medians[i])) {
+            valid_values[valid_count++] = inputs[i];
+        }
+    }
+
+    // Compute validated AoA
+    float aoa = 0.0;
+
+    if (valid_count > 0) {
+        for (int i = 0; i < valid_count; i++)
+            aoa += valid_values[i];
+
+        aoa /= valid_count;
+        output->fault_flag = 0;
     } else {
-        output->fused_value = 0.0f; // fallback
+        // All sensors faulty
+        aoa = medians[0];  // fallback
+        output->fault_flag = 1;
     }
+
+    // Confidence score
+    output->confidence = (float)valid_count / NUM_SENSORS;
+    output->aoa_validated = aoa;
+
+    pthread_mutex_unlock(ctx->mutex);
 }
