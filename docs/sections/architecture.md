@@ -34,7 +34,7 @@ Preliminary software block decomposition derived from the project spec, UART fra
 config:
   layout: elk
 ---
-flowchart TD
+flowchart TB
 
 System["SYSTEM
 Responsibility:
@@ -71,7 +71,7 @@ Interface:
 - fsm_get_context()
 "]
 
-System --> Safety["SAFETY POLICY / THRESHOLD MANAGER
+System --> Safety["THRESHOLD MANAGER
 Responsibility:
 - Resolve aircraft and flight-mode limits
 - Provide thresholds to supervisor
@@ -86,7 +86,7 @@ Interface:
 - thresholds_lookup()
 "]
 
-System --> Input["INPUT ACQUISITION MANAGER
+System --> Input["INPUT MANAGER
 Responsibility:
 - Parse UART sensor frames
 - Validate raw inputs
@@ -835,55 +835,130 @@ config:
 ---
 flowchart TB
 
-    MAIN["MAIN"]
+System["SYSTEM
+Responsibility:
+- Overall coordination of AoA safety pipeline
+- Lifecycle initialization and control-cycle execution
 
-    AoA["AoAControl"]
-    Input["UART Input"]
-    SENSOR["FlightControl"]
-    override["OverrideControl"]
-    ALARM["AlarmSystem"]
-    log["Logging"]
+Encapsulates:
+- EventGroupHandle
+- ControlTimerHandle
+- CycleCounter
 
-    validator["SensorValidator
-    Interface: sensor_tick()
-    get_sensor_state() : SensorState
-    get_voted_aoa() : float
-    Owner: Aditya Ashok Pise"]
-    estimator["AoA_Estimator
-    Interface: estimate_tick()
-    get_aoa_effective() : float
-    get_aoa_status() : AoaStatus
-    Owner: Aditya Ashok Pise"]
+Interface:
+- app_main()
+- control_task()
+- control_timer_callback()
+"]
 
-    AoASensor["AoA_Sensor_Frames"]
-    parameter["Flight Parameter Frames"]
-    mode["Flight Mode Frames"]
-    config["Aircraft Configuration"]
-    MAIN --- AoA
-    MAIN --- Input
-    MAIN --- SENSOR
-    MAIN --- override
-    MAIN --- ALARM
-    MAIN --- log
-    AoA --- validator
-    AoA --- estimator
-    Input --- AoASensor
-    Input --- parameter
-    Input --- mode
-    Input --- config
-    AoASensor --- validator
-    AoASensor --- log
+System --> Supervisor["SUPERVISOR / SAFETY STATE MANAGER
+Responsibility:
+- Own AoA safety state
+- Validate and enforce state transitions
+- Escalate authority levels
 
-    parameter --- SENSOR
-    mode --- SENSOR
-    config --- SENSOR
+Encapsulates:
+- CurrentState
+- AoALimitLow
+- AoALimitHigh
+- StateEntryTime
 
-    validator --- estimator
-    estimator --- SENSOR
+Interface:
+- fsm_init()
+- fsm_set_thresholds()
+- fsm_run()
+- fsm_get_context()
+"]
 
-    SENSOR --- override
-    SENSOR --- ALARM
-    SENSOR --- log
+System --> Safety["THRESHOLD MANAGER
+Responsibility:
+- Resolve aircraft and flight-mode limits
+- Provide thresholds to supervisor
+- Handle fallback defaults
+
+Encapsulates:
+- ThresholdTable
+- NumThresholdEntries
+- ThresholdLoadStatus
+
+Interface:
+- thresholds_lookup()
+"]
+
+System --> Input["INPUT MANAGER
+Responsibility:
+- Parse UART sensor frames
+- Validate raw inputs
+- Update shared sensor data
+
+Encapsulates:
+- SensorBuffers
+- Airspeed
+- FlightMode
+- Timestamp
+- BufferMutex
+
+Interface:
+- hal_input_init()
+- hal_input_task()
+- hal_get_sensor_data()
+- hal_lock_sensor_data()
+- hal_unlock_sensor_data()
+"]
+
+System --> Logger["LOGGING & ALARM MANAGER
+Responsibility:
+- Record telemetry data
+- Control LED alarm behavior
+- Maintain system observability
+
+Encapsulates:
+- LogEntryBuffer
+- LedBlinkCounter
+- LedBlinkPeriod
+
+Interface:
+- logger_init()
+- logger_control_led()
+- logger_write_entry()
+"]
+
+Input --> Validator["SENSOR VALIDATOR
+Responsibility:
+- Compute median AoA
+- Detect and reject outliers
+- Output valid sensor set
+
+Encapsulates:
+- SensorValues
+- SensorValidityFlags
+- MedianAoA
+- NumValidSensors
+
+Interface:
+- validator_run()
+- calculate_median()
+"]
+
+Validator --> Estimator["AOA ESTIMATOR
+Responsibility:
+- Fuse valid sensor data
+- Apply Kalman filtering
+- Produce final AoA estimate
+
+Encapsulates:
+- FusedAoA
+- KalmanEstimatedAoA
+- KalmanEstimatedVariance
+
+Interface:
+- estimator_init()
+- estimator_run()
+"]
+
+Estimator --> Supervisor
+Safety --> Supervisor
+Supervisor --> Logger
 ```
 
 
