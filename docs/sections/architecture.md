@@ -36,11 +36,10 @@ config:
 ---
 flowchart TD
 
-System["SYSTEM / MAIN ORCHESTRATOR
+System["SYSTEM
 Responsibility:
 - Overall coordination of AoA safety pipeline
-- Lifecycle and task initialization
-- Deterministic 20ms control-cycle execution
+- Lifecycle initialization and control-cycle execution
 
 Encapsulates:
 - EventGroupHandle
@@ -53,11 +52,11 @@ Interface:
 - control_timer_callback()
 "]
 
-System --> Supervisor["SUPERVISOR / SAFETY STATE MANAGER (FSM)
+System --> Supervisor["SUPERVISOR / SAFETY STATE MANAGER
 Responsibility:
 - Own AoA safety state
-- Validate and enforce transitions
-- Escalate authority: NORMAL -> CAUTION -> PROTECTION -> OVERRIDE
+- Validate and enforce state transitions
+- Escalate authority levels
 
 Encapsulates:
 - CurrentState
@@ -67,16 +66,16 @@ Encapsulates:
 
 Interface:
 - fsm_init()
-- fsm_set_thresholds(aircraft_type, flight_mode)
-- fsm_run(calculated_aoa)
+- fsm_set_thresholds()
+- fsm_run()
 - fsm_get_context()
 "]
 
 System --> Safety["SAFETY POLICY / THRESHOLD MANAGER
 Responsibility:
-- Resolve mode/aircraft safety envelope
-- Provide limits to FSM
-- Fallback to defaults on CSV load failure
+- Resolve aircraft and flight-mode limits
+- Provide thresholds to supervisor
+- Handle fallback defaults
 
 Encapsulates:
 - ThresholdTable
@@ -84,26 +83,24 @@ Encapsulates:
 - ThresholdLoadStatus
 
 Interface:
-- thresholds_lookup(aircraft_type, flight_mode, aoa_low, aoa_high)
+- thresholds_lookup()
 "]
 
-System --> Input["INPUT ACQUISITION MANAGER (HAL)
+System --> Input["INPUT ACQUISITION MANAGER
 Responsibility:
-- Parse asynchronous UART frames
-- Validate raw input ranges
-- Update shared sensor store with mutex protection
+- Parse UART sensor frames
+- Validate raw inputs
+- Update shared sensor data
 
 Encapsulates:
-- Sensor1Buffer
-- Sensor2Buffer
-- Sensor3Buffer
+- SensorBuffers
 - Airspeed
 - FlightMode
 - Timestamp
 - BufferMutex
 
 Interface:
-- hal_input_init(event_group)
+- hal_input_init()
 - hal_input_task()
 - hal_get_sensor_data()
 - hal_lock_sensor_data()
@@ -112,9 +109,9 @@ Interface:
 
 System --> Logger["LOGGING & ALARM MANAGER
 Responsibility:
-- Record runtime telemetry over UART
-- Execute LED alarm policy from FSM output
-- Maintain observability of control states
+- Record telemetry data
+- Control LED alarm behavior
+- Maintain system observability
 
 Encapsulates:
 - LogEntryBuffer
@@ -123,15 +120,15 @@ Encapsulates:
 
 Interface:
 - logger_init()
-- logger_control_led(led_on, blink_period_ms)
-- logger_write_entry(entry)
+- logger_control_led()
+- logger_write_entry()
 "]
 
 Input --> Validator["SENSOR VALIDATOR
 Responsibility:
 - Compute median AoA
-- Detect/reject outlier sensors
-- Publish sensor validity and valid count
+- Detect and reject outliers
+- Output valid sensor set
 
 Encapsulates:
 - SensorValues
@@ -140,28 +137,24 @@ Encapsulates:
 - NumValidSensors
 
 Interface:
-- validator_run(sensor_data)
-- validator_run_values(s1, s2, s3)
-- calculate_median(v1, v2, v3)
+- validator_run()
+- calculate_median()
 "]
 
 Validator --> Estimator["AOA ESTIMATOR
 Responsibility:
-- Fuse valid sensors into one measurement
-- Apply Kalman filtering for stable estimate
-- Produce final calculated AoA for FSM
+- Fuse valid sensor data
+- Apply Kalman filtering
+- Produce final AoA estimate
 
 Encapsulates:
 - FusedAoA
-- FinalCalculatedAoA
 - KalmanEstimatedAoA
 - KalmanEstimatedVariance
 
 Interface:
 - estimator_init()
-- estimator_run(validator_result, estimator_state)
-- perform_weighted_fusion(validator_result)
-- apply_kalman_filter(measurement, kalman_state)
+- estimator_run()
 "]
 
 Estimator --> Supervisor
