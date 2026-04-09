@@ -38,47 +38,59 @@ config:
 ---
 flowchart TB
 
-    MAIN["MAIN"]
+    %% Core pipeline
+    MAIN["MAIN CONTROL ORCHESTRATOR<br/>20ms cycle"]
+    INPUT["HAL INPUT TASK<br/>UART parser + mutex store"]
+    STORE["SHARED SENSOR STORE<br/>S1,S2,S3,AIRSPEED,MODE,TS"]
+    VALID["SENSOR VALIDATOR<br/>median + outlier rejection"]
+    EST["AOA ESTIMATOR<br/>fusion + Kalman"]
+    THR["THRESHOLD PROVIDER<br/>Aircraft/Mode AoA limits"]
+    FSM["SAFETY / OVERRIDE STATE MANAGER"]
+    LOG["LOGGER + LED ALARM"]
 
-    AoA["AoAControl"]
-    Input["UART Input"]
-    SENSOR["FlightControl"]
-    override["OverrideControl"]
-    ALARM["AlarmSystem"]
-    log["Logging"]
+    %% Incoming frame streams
+    AOA["$AOA Frames"]
+    FP["$FLIGHT_PARAMS Frames"]
+    FM["$FLIGHT_MODE Frames"]
 
-    validator["SensorValidator"]
-    estimator["AoA_Estimator"]
+    %% Authority states (inside safety manager logic)
+    N["NORMAL<br/>Pilot/Autopilot authority"]
+    C["CAUTION<br/>Pilot/Autopilot + warning"]
+    P["PROTECTION<br/>Protection logic dominant"]
+    O["OVERRIDE<br/>Safety override authority"]
 
-    AoASensor["AoA_Sensor_Frames"]
-    parameter["Flight Parameter Frames"]
-    mode["Flight Mode Frames"]
-    config["Aircraft Configuration"]
-    MAIN --- AoA
-    MAIN --- Input
-    MAIN --- SENSOR
-    MAIN --- override
-    MAIN --- ALARM
-    MAIN --- log
-    AoA --- validator
-    AoA --- estimator
-    Input --- AoASensor
-    Input --- parameter
-    Input --- mode
-    Input --- config
-    AoASensor --- validator
-    AoASensor --- log
+    %% Flows
+    AOA --> INPUT
+    FP --> INPUT
+    FM --> INPUT
 
-    parameter --- SENSOR
-    mode --- SENSOR
-    config --- SENSOR
+    INPUT --> STORE
+    MAIN --> STORE
+    STORE --> VALID
+    VALID --> EST
+    EST --> FSM
+    THR --> FSM
+    FSM --> LOG
 
-    validator --- estimator
-    estimator --- SENSOR
+    %% State resolution
+    FSM --> N
+    FSM --> C
+    FSM --> P
+    FSM --> O
 
-    SENSOR --- override
-    SENSOR --- ALARM
-    SENSOR --- log
+    %% Styling by authority severity
+    classDef normal fill:#d1fae5,stroke:#065f46,stroke-width:2px,color:#064e3b;
+    classDef caution fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#78350f;
+    classDef protect fill:#fed7aa,stroke:#9a3412,stroke-width:2px,color:#7c2d12;
+    classDef override fill:#fecaca,stroke:#991b1b,stroke-width:2px,color:#7f1d1d;
+    classDef module fill:#e0f2fe,stroke:#1e3a8a,stroke-width:1.5px,color:#0f172a;
+
+    class N normal;
+    class C caution;
+    class P protect;
+    class O override;
+
+    class MAIN,INPUT,STORE,VALID,EST,THR,FSM,LOG,AOA,FP,FM module;
 ```
 - We are using the *Coordinated Controller Pattern*
 - Assumption: Timestamp for both AoA sensor Frame and Flight Parameter Frame will always same.
