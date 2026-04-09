@@ -34,61 +34,139 @@ Preliminary software block decomposition derived from the project spec, UART fra
 config:
   layout: elk
 ---
-flowchart TB
+flowchart TD
 
-    %% Core pipeline
-    MAIN["MAIN CONTROL ORCHESTRATOR<br/>20ms cycle"]
-    INPUT["HAL INPUT TASK<br/>UART parser + mutex store"]
-    STORE["SHARED SENSOR STORE<br/>S1,S2,S3,AIRSPEED,MODE,TS"]
-    VALID["SENSOR VALIDATOR<br/>median + outlier rejection"]
-    EST["AOA ESTIMATOR<br/>fusion + Kalman"]
-    THR["THRESHOLD PROVIDER<br/>Aircraft/Mode AoA limits"]
-    FSM["SAFETY / OVERRIDE STATE MANAGER"]
-    LOG["LOGGER + LED ALARM"]
+System["SYSTEM / MAIN ORCHESTRATOR
+Responsibility:
+- Overall coordination of AoA safety pipeline
+- Lifecycle and task initialization
+- Deterministic 20ms control-cycle execution
 
-    %% Incoming frame streams
-    AOA["$AOA Frames"]
-    FP["$FLIGHT_PARAMS Frames"]
-    FM["$FLIGHT_MODE Frames"]
+Encapsulates:
+- EventGroupHandle
+- ControlTimerHandle
+- CycleCounter
 
-    %% Authority states (inside safety manager logic)
-    N["NORMAL<br/>Pilot/Autopilot authority"]
-    C["CAUTION<br/>Pilot/Autopilot + warning"]
-    P["PROTECTION<br/>Protection logic dominant"]
-    O["OVERRIDE<br/>Safety override authority"]
+Interface:
+- app_main()
+- control_task()
+- control_timer_callback()
+"]
 
-    %% Flows
-    AOA --> INPUT
-    FP --> INPUT
-    FM --> INPUT
+System --> Supervisor["SUPERVISOR / SAFETY STATE MANAGER (FSM)
+Responsibility:
+- Own AoA safety state
+- Validate and enforce transitions
+- Escalate authority: NORMAL -> CAUTION -> PROTECTION -> OVERRIDE
 
-    INPUT --> STORE
-    MAIN --> STORE
-    STORE --> VALID
-    VALID --> EST
-    EST --> FSM
-    THR --> FSM
-    FSM --> LOG
+Encapsulates:
+- CurrentState
+- AoALimitLow
+- AoALimitHigh
+- StateEntryTime
 
-    %% State resolution
-    FSM --> N
-    FSM --> C
-    FSM --> P
-    FSM --> O
+Interface:
+- fsm_init()
+- fsm_set_thresholds(aircraft_type, flight_mode)
+- fsm_run(calculated_aoa)
+- fsm_get_context()
+"]
 
-    %% Styling by authority severity
-    classDef normal fill:#d1fae5,stroke:#065f46,stroke-width:2px,color:#064e3b;
-    classDef caution fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#78350f;
-    classDef protect fill:#fed7aa,stroke:#9a3412,stroke-width:2px,color:#7c2d12;
-    classDef override fill:#fecaca,stroke:#991b1b,stroke-width:2px,color:#7f1d1d;
-    classDef module fill:#e0f2fe,stroke:#1e3a8a,stroke-width:1.5px,color:#0f172a;
+System --> Safety["SAFETY POLICY / THRESHOLD MANAGER
+Responsibility:
+- Resolve mode/aircraft safety envelope
+- Provide limits to FSM
+- Fallback to defaults on CSV load failure
 
-    class N normal;
-    class C caution;
-    class P protect;
-    class O override;
+Encapsulates:
+- ThresholdTable
+- NumThresholdEntries
+- ThresholdLoadStatus
 
-    class MAIN,INPUT,STORE,VALID,EST,THR,FSM,LOG,AOA,FP,FM module;
+Interface:
+- thresholds_lookup(aircraft_type, flight_mode, aoa_low, aoa_high)
+"]
+
+System --> Input["INPUT ACQUISITION MANAGER (HAL)
+Responsibility:
+- Parse asynchronous UART frames
+- Validate raw input ranges
+- Update shared sensor store with mutex protection
+
+Encapsulates:
+- Sensor1Buffer
+- Sensor2Buffer
+- Sensor3Buffer
+- Airspeed
+- FlightMode
+- Timestamp
+- BufferMutex
+
+Interface:
+- hal_input_init(event_group)
+- hal_input_task()
+- hal_get_sensor_data()
+- hal_lock_sensor_data()
+- hal_unlock_sensor_data()
+"]
+
+System --> Logger["LOGGING & ALARM MANAGER
+Responsibility:
+- Record runtime telemetry over UART
+- Execute LED alarm policy from FSM output
+- Maintain observability of control states
+
+Encapsulates:
+- LogEntryBuffer
+- LedBlinkCounter
+- LedBlinkPeriod
+
+Interface:
+- logger_init()
+- logger_control_led(led_on, blink_period_ms)
+- logger_write_entry(entry)
+"]
+
+Input --> Validator["SENSOR VALIDATOR
+Responsibility:
+- Compute median AoA
+- Detect/reject outlier sensors
+- Publish sensor validity and valid count
+
+Encapsulates:
+- SensorValues
+- SensorValidityFlags
+- MedianAoA
+- NumValidSensors
+
+Interface:
+- validator_run(sensor_data)
+- validator_run_values(s1, s2, s3)
+- calculate_median(v1, v2, v3)
+"]
+
+Validator --> Estimator["AOA ESTIMATOR
+Responsibility:
+- Fuse valid sensors into one measurement
+- Apply Kalman filtering for stable estimate
+- Produce final calculated AoA for FSM
+
+Encapsulates:
+- FusedAoA
+- FinalCalculatedAoA
+- KalmanEstimatedAoA
+- KalmanEstimatedVariance
+
+Interface:
+- estimator_init()
+- estimator_run(validator_result, estimator_state)
+- perform_weighted_fusion(validator_result)
+- apply_kalman_filter(measurement, kalman_state)
+"]
+
+Estimator --> Supervisor
+Safety --> Supervisor
+Supervisor --> Logger
 ```
 - We are using the *Coordinated Controller Pattern*
 - Assumption: Timestamp for both AoA sensor Frame and Flight Parameter Frame will always same.
