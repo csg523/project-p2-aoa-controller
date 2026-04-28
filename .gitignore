@@ -1,0 +1,32 @@
+# Build artifacts
+/build/
+/build-*/
+*.elf
+*.bin
+*.map
+project_description.json
+
+# CMake / IDF
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# SDK config
+sdkconfig
+sdkconfig.old
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Misc
+*.o
+*.obj
+*.tmp
