@@ -1,7 +1,0 @@
--Wno-frame-address
--mlongcalls
--fno-builtin-memcpy
--fno-builtin-memset
--fno-builtin-bzero
-"-specs=/Users/aditya/Desktop/aoav3/aoa_controller-2/build/specs/picolibc.specs"
--fno-rtti
