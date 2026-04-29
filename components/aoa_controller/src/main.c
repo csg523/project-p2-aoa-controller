@@ -18,6 +18,7 @@ static EventGroupHandle_t event_group = NULL;
 static uint32_t cycle_count = 0;
 static esp_timer_handle_t control_timer = NULL;
 
+
 static void control_timer_callback(void *arg) {
     xEventGroupSetBits(event_group, BIT_RUN_CYCLE);
 }
@@ -29,6 +30,14 @@ static void control_task(void *pvParameters) {
     fsm_init();
     
     fsm_set_thresholds("Aircraft_A", "CRUISE");
+
+    ESP_LOGI(TAG, "Control task suspended: Waiting for first UART data...");
+    xEventGroupWaitBits(event_group,
+                        BIT_DATA_READY,
+                        pdFALSE,    /* do not clear on exit */
+                        pdTRUE,     /* wait for all bits (only one here) */
+                        portMAX_DELAY);
+    ESP_LOGI(TAG, "Initial data received! Engaging continuous control loop.");
 
     for (;;) {
         EventBits_t bits = xEventGroupWaitBits(

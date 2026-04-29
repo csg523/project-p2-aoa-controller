@@ -4,15 +4,33 @@ import serial
 import time
 import argparse
 import sys
+import csv
 
 def read_messages_from_csv(filename):
     messages = []
     try:
-        with open(filename, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#'):
-                    messages.append(line)
+        with open(filename, 'r', newline='') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                s1 = row.get('s1')
+                s2 = row.get('s2')
+                s3 = row.get('s3')
+                ts = row.get('ts')
+                mode = (row.get('mode') or '').strip()
+                airspeed = row.get('airspeed')
+
+                if not s1 or not s2 or not s3 or not ts:
+                    continue
+
+                ts_int = int(float(ts))
+                messages.append(f"$AOA,S1={s1},S2={s2},S3={s3},TS={ts_int}*")
+
+                if mode:
+                    messages.append(f"$FLIGHT_MODE,MODE={mode},TS={ts_int}*")
+
+                if airspeed:
+                    messages.append(f"$FLIGHT_PARAMS,AIRSPEED={airspeed},TS={ts_int}*")
+
         return messages
     except FileNotFoundError:
         print(f"Error: File '{filename}' not found")

@@ -4,10 +4,50 @@
 #include <driver/gpio.h>
 #include <driver/uart.h>
 #include <esp_log.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 static const char *TAG = "LOGGER";
-static uint32_t led_blink_counter = 0;
-static uint32_t led_blink_period = 0;
+static volatile uint32_t led_blink_period = 0;
+static volatile bool led_target_on = false;
+static TaskHandle_t led_task_handle = NULL;
+
+static void led_task(void *arg) {
+    (void)arg;
+    uint32_t last_period = UINT32_MAX;
+    bool last_on = false;
+    bool led_state = false;
+    for (;;) {
+        uint32_t period = led_blink_period;
+        bool target_on = led_target_on;
+
+        if (period == 0) {
+            if (period != last_period || target_on != last_on) {
+                led_state = target_on;
+                gpio_set_level(LED_GPIO_PIN, led_state ? 1 : 0);
+            }
+            last_period = 0;
+            last_on = target_on;
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
+        if (period != last_period) {
+            led_state = true;
+            gpio_set_level(LED_GPIO_PIN, 1);
+            last_period = period;
+        } else {
+            led_state = !led_state;
+            gpio_set_level(LED_GPIO_PIN, led_state ? 1 : 0);
+        }
+        last_on = target_on;
+        uint32_t half = period / 2;
+        if (half < 50) {
+            half = 50;
+        }
+        vTaskDelay(pdMS_TO_TICKS(half));
+    }
+}
 
 void logger_init(void) {
     gpio_config_t io_conf = {
@@ -19,21 +59,15 @@ void logger_init(void) {
     };
     gpio_config(&io_conf);
     gpio_set_level(LED_GPIO_PIN, 0);
+    if (!led_task_handle) {
+        xTaskCreate(led_task, "led_task", 2048, NULL, 5, &led_task_handle);
+    }
     ESP_LOGI(TAG, "Logger initialized");
 }
 
 void logger_control_led(bool led_on, uint32_t blink_period_ms) {
+    led_target_on = led_on;
     led_blink_period = blink_period_ms;
-    if (blink_period_ms == 0) { gpio_set_level(LED_GPIO_PIN, led_on ? 1 : 0); }
-}
-
-static void update_led_blink(void) {
-    if (led_blink_period == 0) return;
-    led_blink_counter += CONTROL_CYCLE_PERIOD_MS;
-    if (led_blink_counter >= led_blink_period) {
-        led_blink_counter = 0;
-        gpio_set_level(LED_GPIO_PIN, 1 - gpio_get_level(LED_GPIO_PIN));
-    }
 }
 
 void logger_write_entry(const log_entry_t *entry) {
@@ -51,5 +85,4 @@ void logger_write_entry(const log_entry_t *entry) {
              entry->status);
     uart_write_bytes(UART_NUM_0, (const char *)log_line, strlen(log_line));
     ESP_LOGD(TAG, "Logged: %s", log_line);
-    update_led_blink();
 }
