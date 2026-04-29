@@ -21,7 +21,7 @@ idf.py flash
 Run the demo dataset (single process, read + write, ends in NORMAL):
 
 ```bash
-python tools/serial_duplex.py --port COM6 --baud 115200 --file components aoa_controller/data/sim_state_demo.csv --send-all-once --interval 1000 --finish-normal
+python tools/serial_duplex.py --port COM6 --baud 115200 --file components/aoa_controller/data/sim_state_demo.csv --send-all-once --interval 1000 --finish-normal
 ```
 
 Alternate sender (CSV -> UART messages):
