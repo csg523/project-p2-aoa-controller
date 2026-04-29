@@ -1,5 +1,4 @@
-<<<<<<< HEAD
- ## Project - Aircraft Angle-of-Attack (AoA) Safety Controller  
+## Project - Aircraft Angle-of-Attack (AoA) Safety Controller  
 **(UART-Simulated Inputs, Independent Data Sources)**
 
 ---
