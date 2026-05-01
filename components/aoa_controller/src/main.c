@@ -39,6 +39,8 @@ static void control_task(void *pvParameters) {
                         portMAX_DELAY);
     ESP_LOGI(TAG, "Initial data received! Engaging continuous control loop.");
 
+    estimator_state_t estimator_state = {0};
+
     for (;;) {
         EventBits_t bits = xEventGroupWaitBits(
             event_group,
@@ -72,7 +74,6 @@ static void control_task(void *pvParameters) {
 
         validator_result_t validation = validator_run_values(s1, s2, s3);
 
-        estimator_state_t estimator_state = {0};
         estimator_run(&validation, &estimator_state);
 
         fsm_set_thresholds("Aircraft_A", flight_mode_local);

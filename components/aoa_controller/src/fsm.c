@@ -14,11 +14,15 @@ void fsm_init(void) {
 
 void fsm_set_thresholds(const char *aircraft_type, const char *flight_mode) {
     float low = 0, high = 0;
+    static char last_mode[16] = "";
     if (thresholds_lookup(aircraft_type, flight_mode, &low, &high)) {
-        fsm_context.aoa_limit_low = low;
-        fsm_context.aoa_limit_high = high;
-        ESP_LOGI(TAG, "Thresholds set: %s/%s -> Low=%.1f High=%.1f",
-                 aircraft_type, flight_mode, low, high);
+        if (strncmp(flight_mode, last_mode, 16) != 0) {
+            fsm_context.aoa_limit_low = low;
+            fsm_context.aoa_limit_high = high;
+            ESP_LOGI(TAG, "Thresholds set: %s/%s -> Low=%.1f High=%.1f",
+                     aircraft_type, flight_mode, low, high);
+            strncpy(last_mode, flight_mode, 16);
+        }
     }
 }
 
